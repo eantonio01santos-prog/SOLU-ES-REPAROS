@@ -1,0 +1,1344 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Soluções & Reparos | Atendimento & Gestão</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Font Awesome para Ícones -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Firebase Compat SDK (App + Firestore) -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            blue: '#0f172a',
+                            primary: '#1d4ed8',
+                            solar: '#f59e0b',
+                            whatsapp: '#16a34a',
+                            whatsappHover: '#15803d'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased min-h-screen flex flex-col">
+
+    <!-- Notificação Toast Customizada -->
+    <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-xs w-full pointer-events-none"></div>
+
+    <!-- Modal de Confirmação Customizado -->
+    <div id="confirm-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 border border-slate-100">
+            <div class="flex items-center gap-3 text-amber-600 mb-3">
+                <i class="fa-solid fa-triangle-exclamation text-2xl"></i>
+                <h3 id="confirm-title" class="text-lg font-bold text-slate-900">Confirmar Ação</h3>
+            </div>
+            <p id="confirm-message" class="text-sm text-slate-600 mb-6">Tem certeza que deseja continuar?</p>
+            <div class="flex justify-end gap-3">
+                <button id="confirm-cancel-btn" class="px-4 py-2.5 rounded-xl text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition">Cancelar</button>
+                <button id="confirm-ok-btn" class="px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-red-600 hover:bg-red-700 transition">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Edição de Serviço -->
+    <div id="edit-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden items-center justify-center p-4 overflow-y-auto">
+        <div class="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 border border-slate-100 my-8">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
+                <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                    <i class="fa-solid fa-pen-to-square text-blue-600"></i> Editar Serviço
+                </h3>
+                <button onclick="closeEditModal()" class="text-slate-400 hover:text-slate-600 p-2 rounded-lg">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+            <form id="edit-service-form" class="space-y-4">
+                <input type="hidden" id="edit-id">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Data do Serviço *</label>
+                        <input type="date" id="edit-date" required class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Valor Cobrado (R$) *</label>
+                        <input type="number" step="0.01" min="0" id="edit-value" required class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm">
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Nome do Cliente *</label>
+                        <input type="text" id="edit-client" required class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">WhatsApp do Cliente *</label>
+                        <input type="tel" id="edit-phone" required oninput="maskPhone(this)" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Tipo de Serviço *</label>
+                    <select id="edit-type" required class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm bg-white">
+                        <option value="Pequenos Reparos">Pequenos Reparos</option>
+                        <option value="Limpeza de Painéis Solares">Limpeza de Painéis Solares (Lembrete 6 meses)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Descrição Detalhada do Serviço *</label>
+                    <textarea id="edit-desc" rows="3" required class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm"></textarea>
+                </div>
+                <div class="flex justify-end gap-3 pt-2">
+                    <button type="button" onclick="closeEditModal()" class="px-4 py-2.5 rounded-xl text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition">Cancelar</button>
+                    <button type="submit" class="px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 transition shadow-sm">Salvar Alterações</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Barra de Navegação Superior -->
+    <header class="bg-slate-900 text-white shadow-md sticky top-0 z-40">
+        <div class="max-w-5xl mx-auto px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div class="flex items-center gap-3 w-full sm:w-auto justify-between">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-slate-900 shadow-inner">
+                        <i class="fa-solid fa-solar-panel text-lg"></i>
+                    </div>
+                    <div>
+                        <h1 class="font-extrabold text-lg leading-tight tracking-tight">Soluções & Reparos</h1>
+                        <div class="flex items-center gap-2">
+                            <p class="text-xs text-slate-300">Manutenção & Energia Solar</p>
+                            <span id="cloud-status-badge" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-800 text-slate-300 border border-slate-700">
+                                <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span> Local
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Abas de Alternância -->
+            <nav class="flex bg-slate-800 p-1 rounded-xl w-full sm:w-auto">
+                <button id="tab-client-btn" onclick="switchTab('client')" class="flex-1 sm:flex-initial px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2 bg-blue-600 text-white shadow">
+                    <i class="fa-brands fa-whatsapp text-base"></i>
+                    <span>Área do Cliente</span>
+                </button>
+                <button id="tab-admin-btn" onclick="switchTab('admin')" class="flex-1 sm:flex-initial px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2 text-slate-300 hover:text-white">
+                    <i class="fa-solid fa-calendar-check text-sm"></i>
+                    <span>Meu Painel</span>
+                    <span id="nav-alert-badge" class="hidden bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">0</span>
+                </button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- CONTEÚDO PRINCIPAL -->
+    <main class="flex-1 max-w-5xl w-full mx-auto px-4 py-6">
+
+        <!-- ==========================================
+             ABA 1: ÁREA DO CLIENTE (ORÇAMENTO RÁPIDO)
+             ========================================== -->
+        <section id="view-client" class="space-y-6">
+            <div class="bg-white rounded-2xl p-5 sm:p-6 shadow-sm border border-slate-200/80">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4 mb-4">
+                    <div>
+                        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 mb-2">
+                            <i class="fa-solid fa-bolt"></i> Orçamento Rápido e Sem Compromisso
+                        </span>
+                        <h2 class="text-xl sm:text-2xl font-bold text-slate-900">Solicite seu Atendimento</h2>
+                        <p class="text-sm text-slate-600 mt-1">Preencha os detalhes abaixo para iniciarmos seu orçamento direto no WhatsApp.</p>
+                    </div>
+                    <div class="bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs space-y-1.5 shrink-0">
+                        <div class="flex items-center gap-2 font-semibold text-slate-800">
+                            <i class="fa-regular fa-clock text-blue-600"></i>
+                            <span>Seg a Sáb: 08h às 18h</span>
+                        </div>
+                        <div class="flex items-center gap-2 text-slate-600">
+                            <i class="fa-solid fa-comment-dots text-green-600"></i>
+                            <span>Exclusivo por mensagem (sem ligações)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Formulário do Cliente -->
+                <form id="client-quote-form" class="space-y-5">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label for="client-name" class="block text-sm font-semibold text-slate-700 mb-1.5">Seu Nome *</label>
+                            <input type="text" id="client-name" required placeholder="Ex: Carlos Eduardo" class="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm transition">
+                        </div>
+                        <div>
+                            <label for="client-location" class="block text-sm font-semibold text-slate-700 mb-1.5">Bairro / Cidade *</label>
+                            <input type="text" id="client-location" required placeholder="Ex: Centro - Nova Esperança" class="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm transition">
+                        </div>
+                    </div>
+
+                    <!-- Seletor Visual de Tipo de Serviço -->
+                    <div>
+                        <label class="block text-sm font-semibold text-slate-700 mb-2">Qual serviço você precisa? *</label>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <button type="button" id="btn-select-repair" onclick="selectClientServiceType('repair')" class="p-4 rounded-2xl border-2 border-blue-600 bg-blue-50/70 text-left transition flex items-start gap-3.5 shadow-sm">
+                                <div class="w-11 h-11 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 mt-0.5">
+                                    <i class="fa-solid fa-screwdriver-wrench text-lg"></i>
+                                </div>
+                                <div>
+                                    <div class="font-bold text-slate-900 text-base">Pequenos Reparos</div>
+                                    <div class="text-xs text-slate-600 mt-0.5">Elétrica, hidráulica, instalações, torneiras, chuveiros e manutenção geral.</div>
+                                </div>
+                            </button>
+
+                            <button type="button" id="btn-select-solar" onclick="selectClientServiceType('solar')" class="p-4 rounded-2xl border-2 border-slate-200 bg-white hover:border-amber-400 text-left transition flex items-start gap-3.5">
+                                <div class="w-11 h-11 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 mt-0.5">
+                                    <i class="fa-solid fa-solar-panel text-lg"></i>
+                                </div>
+                                <div>
+                                    <div class="font-bold text-slate-900 text-base">Limpeza de Painéis Solares</div>
+                                    <div class="text-xs text-slate-600 mt-0.5">Higienização técnica para recuperar a eficiência de geração das placas.</div>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Campos Específicos: PEQUENOS REPAROS -->
+                    <div id="client-fields-repair" class="space-y-4 bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-200/80">
+                        <div>
+                            <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Categoria Rápida (Opcional)</label>
+                            <div class="flex flex-wrap gap-2" id="repair-categories">
+                                <button type="button" onclick="toggleCategory(this, 'Elétrica')" class="cat-chip px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-300 bg-white text-slate-700 hover:border-blue-500 transition">⚡ Elétrica</button>
+                                <button type="button" onclick="toggleCategory(this, 'Hidráulica')" class="cat-chip px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-300 bg-white text-slate-700 hover:border-blue-500 transition">💧 Hidráulica</button>
+                                <button type="button" onclick="toggleCategory(this, 'Instalações Gerais')" class="cat-chip px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-300 bg-white text-slate-700 hover:border-blue-500 transition">📺 Suportes / Instalações</button>
+                                <button type="button" onclick="toggleCategory(this, 'Alvenaria / Piso')" class="cat-chip px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-300 bg-white text-slate-700 hover:border-blue-500 transition">🧱 Alvenaria / Reparos</button>
+                                <button type="button" onclick="toggleCategory(this, 'Outro')" class="cat-chip px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-300 bg-white text-slate-700 hover:border-blue-500 transition">🛠️ Outro</button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label for="repair-description" class="block text-sm font-bold text-slate-800 mb-1.5">
+                                Descrição detalhada do serviço / problema *
+                            </label>
+                            <textarea id="repair-description" rows="4" required placeholder="Descreva o que precisa ser feito. Ex: Troca de resistência ou chuveiro elétrico, vazamento no sifão da pia da cozinha, instalação de 2 suportes de TV e varão de cortina..." class="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm transition"></textarea>
+                            <p class="text-xs text-slate-500 mt-1">Quanto mais detalhes você informar, mais rápido avaliamos as ferramentas e peças necessárias.</p>
+                        </div>
+                    </div>
+
+                    <!-- Campos Específicos: LIMPEZA SOLAR -->
+                    <div id="client-fields-solar" class="hidden space-y-4 bg-amber-50/50 p-4 sm:p-5 rounded-2xl border border-amber-200/80">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label for="solar-panels-count" class="block text-sm font-bold text-slate-800 mb-1.5">Quantidade aproximada de placas *</label>
+                                <input type="number" id="solar-panels-count" min="1" max="500" placeholder="Ex: 12" class="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none text-sm">
+                            </div>
+                            <div>
+                                <label for="solar-roof-type" class="block text-sm font-bold text-slate-800 mb-1.5">Tipo de Telhado / Altura *</label>
+                                <select id="solar-roof-type" class="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none text-sm">
+                                    <option value="Casa térrea - Telha de barro">Casa térrea - Telha de barro</option>
+                                    <option value="Casa térrea - Telha metálica / zinco">Casa térrea - Telha metálica / zinco</option>
+                                    <option value="Casa térrea - Fibrocimento (Eternit)">Casa térrea - Fibrocimento (Eternit)</option>
+                                    <option value="Sobrado (2 andares ou mais)">Sobrado (2 andares ou mais)</option>
+                                    <option value="Barracão / Comercial">Barracão / Comercial</option>
+                                    <option value="Solo / Estrutura baixa">Solo / Estrutura baixa</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label for="solar-description" class="block text-sm font-bold text-slate-800 mb-1.5">Descrição / Observações adicionais (Opcional)</label>
+                            <textarea id="solar-description" rows="3" placeholder="Ex: Fácil acesso ao telhado, ponto de água próximo, placas com muita poeira/folhas..." class="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none text-sm"></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Aviso sobre Foto e Avaliação Individual -->
+                    <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start gap-3">
+                        <i class="fa-solid fa-camera text-blue-600 text-lg mt-0.5"></i>
+                        <div class="text-xs sm:text-sm text-blue-900">
+                            <span class="font-bold">Importante sobre o orçamento:</span> Cada serviço é avaliado individualmente (não trabalhamos com preço tabelado). Após clicar abaixo, <span class="font-semibold underline">envie uma foto ou vídeo curto</span> no WhatsApp para agilizar sua análise!
+                        </div>
+                    </div>
+
+                    <!-- Botões de Ação -->
+                    <div class="flex flex-col sm:flex-row gap-3 pt-1">
+                        <button type="submit" class="flex-1 py-4 px-6 rounded-xl bg-green-600 hover:bg-green-700 active:scale-[0.99] text-white font-bold text-base shadow-lg shadow-green-600/20 transition flex items-center justify-center gap-2.5">
+                            <i class="fa-brands fa-whatsapp text-2xl"></i>
+                            <span>Enviar Solicitação no WhatsApp</span>
+                        </button>
+                        <button type="button" onclick="copyClientQuoteText()" class="py-4 px-5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm transition flex items-center justify-center gap-2">
+                            <i class="fa-regular fa-copy"></i>
+                            <span>Copiar Texto</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        <!-- ==========================================
+             ABA 2: MEU PAINEL (AGENDA, FINANCEIRO & 6 MESES)
+             ========================================== -->
+        <section id="view-admin" class="hidden space-y-6">
+
+            <!-- Barra de Configurações Rápidas e Backup -->
+            <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
+                <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+                    <label for="company-whatsapp-input" class="text-xs font-bold uppercase text-slate-600 flex items-center gap-1.5 shrink-0">
+                        <i class="fa-brands fa-whatsapp text-green-600 text-base"></i> Seu WhatsApp (Receber Orçamentos):
+                    </label>
+                    <div class="flex gap-2">
+                        <input type="text" id="company-whatsapp-input" placeholder="5544999999999" class="px-3 py-2 rounded-xl border border-slate-300 text-sm font-medium w-44 focus:ring-2 focus:ring-blue-500 outline-none">
+                        <button onclick="saveCompanyWhatsApp()" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold transition">Salvar</button>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-2">
+                    <button onclick="exportBackupJSON()" class="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition flex items-center gap-1.5">
+                        <i class="fa-solid fa-download"></i> Exportar Backup
+                    </button>
+                    <label class="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer">
+                        <i class="fa-solid fa-upload"></i> Importar
+                        <input type="file" accept=".json" onchange="importBackupJSON(event)" class="hidden">
+                    </label>
+                    <button id="btn-clear-demo" onclick="confirmClearDemoData()" class="px-3 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 text-xs font-semibold transition flex items-center gap-1.5">
+                        <i class="fa-solid fa-broom"></i> Limpar Exemplos
+                    </button>
+                </div>
+            </div>
+
+            <!-- Cards de Resumo Financeiro e Operacional -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200/80">
+                    <div class="flex items-center justify-between text-slate-500 mb-2">
+                        <span class="text-xs font-bold uppercase">Faturamento (Mês Atual)</span>
+                        <div class="w-8 h-8 rounded-lg bg-green-100 text-green-600 flex items-center justify-center">
+                            <i class="fa-solid fa-wallet"></i>
+                        </div>
+                    </div>
+                    <div id="stat-month-revenue" class="text-2xl font-extrabold text-slate-900">R$ 0,00</div>
+                    <p id="stat-month-label" class="text-xs text-slate-500 mt-1">Neste mês</p>
+                </div>
+
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200/80">
+                    <div class="flex items-center justify-between text-slate-500 mb-2">
+                        <span class="text-xs font-bold uppercase">Faturamento Total</span>
+                        <div class="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center">
+                            <i class="fa-solid fa-chart-line"></i>
+                        </div>
+                    </div>
+                    <div id="stat-total-revenue" class="text-2xl font-extrabold text-slate-900">R$ 0,00</div>
+                    <p class="text-xs text-slate-500 mt-1">Acumulado registrado</p>
+                </div>
+
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200/80">
+                    <div class="flex items-center justify-between text-slate-500 mb-2">
+                        <span class="text-xs font-bold uppercase">Serviços Realizados</span>
+                        <div class="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center">
+                            <i class="fa-solid fa-screwdriver-wrench"></i>
+                        </div>
+                    </div>
+                    <div id="stat-total-count" class="text-2xl font-extrabold text-slate-900">0</div>
+                    <p class="text-xs text-slate-500 mt-1">Atendimentos concluídos</p>
+                </div>
+
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-amber-200 bg-gradient-to-br from-white to-amber-50/50">
+                    <div class="flex items-center justify-between text-amber-800 mb-2">
+                        <span class="text-xs font-bold uppercase">Alertas Solar (6 Meses)</span>
+                        <div class="w-8 h-8 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center">
+                            <i class="fa-solid fa-bell"></i>
+                        </div>
+                    </div>
+                    <div id="stat-solar-alerts" class="text-2xl font-extrabold text-amber-700">0</div>
+                    <p class="text-xs text-amber-800/80 mt-1">Vencidos ou vencendo em 15d</p>
+                </div>
+            </div>
+
+            <!-- RADAR DE RETORNO: LIMPEZA DE PAINÉIS SOLARES (6 MESES) -->
+            <div class="bg-white rounded-2xl p-5 sm:p-6 shadow-sm border border-amber-200">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-4 mb-4">
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                            <i class="fa-solid fa-sun text-amber-500"></i>
+                            <span>Radar de Retorno: Limpeza Solar (Ciclo de 6 Meses)</span>
+                        </h3>
+                        <p class="text-xs text-slate-500 mt-0.5">Clientes ordenados pela data prevista da próxima lavagem. Clique no botão verde para enviar o lembrete.</p>
+                    </div>
+                </div>
+
+                <div id="solar-radar-list" class="space-y-3">
+                    <!-- Renderizado via JS -->
+                </div>
+            </div>
+
+            <!-- FORMULÁRIO: REGISTRAR NOVO SERVIÇO REALIZADO -->
+            <div class="bg-white rounded-2xl p-5 sm:p-6 shadow-sm border border-slate-200/80">
+                <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2 mb-4">
+                    <i class="fa-solid fa-circle-plus text-blue-600"></i>
+                    <span>Registrar Serviço Realizado na Agenda</span>
+                </h3>
+
+                <form id="admin-add-service-form" class="space-y-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div>
+                            <label for="srv-date" class="block text-xs font-bold uppercase text-slate-600 mb-1.5">Data do Serviço *</label>
+                            <input type="date" id="srv-date" required class="w-full px-3.5 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+                        </div>
+                        <div>
+                            <label for="srv-client" class="block text-xs font-bold uppercase text-slate-600 mb-1.5">Nome do Cliente *</label>
+                            <input type="text" id="srv-client" required placeholder="Ex: João da Silva" class="w-full px-3.5 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+                        </div>
+                        <div>
+                            <label for="srv-phone" class="block text-xs font-bold uppercase text-slate-600 mb-1.5">WhatsApp (com DDD) *</label>
+                            <input type="tel" id="srv-phone" required oninput="maskPhone(this)" placeholder="(44) 99999-9999" class="w-full px-3.5 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+                        </div>
+                        <div>
+                            <label for="srv-value" class="block text-xs font-bold uppercase text-slate-600 mb-1.5">Valor Cobrado (R$) *</label>
+                            <input type="number" step="0.01" min="0" id="srv-value" required placeholder="0,00" class="w-full px-3.5 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm font-semibold">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label for="srv-type" class="block text-xs font-bold uppercase text-slate-600 mb-1.5">Tipo de Serviço *</label>
+                            <select id="srv-type" required class="w-full px-3.5 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-white font-medium">
+                                <option value="Pequenos Reparos">🛠️ Pequenos Reparos</option>
+                                <option value="Limpeza de Painéis Solares">☀️ Limpeza de Painéis Solares (+6 meses)</option>
+                            </select>
+                        </div>
+                        <div class="md:col-span-2">
+                            <label for="srv-desc" class="block text-xs font-bold uppercase text-slate-600 mb-1.5">Descrição Detalhada do Serviço Realizado *</label>
+                            <input type="text" id="srv-desc" required placeholder="Ex: Troca de chuveiro Lorenzetti + reparo na tomada OR 14 placas solares telha barro" class="w-full px-3.5 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end pt-1">
+                        <button type="submit" class="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md transition flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-floppy-disk"></i>
+                            <span>Salvar Serviço na Agenda</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- HISTÓRICO / AGENDA COMPLETA -->
+            <div class="bg-white rounded-2xl p-5 sm:p-6 shadow-sm border border-slate-200/80 space-y-4">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                            <i class="fa-solid fa-list-check text-slate-700"></i>
+                            <span>Agenda & Histórico de Serviços</span>
+                        </h3>
+                        <p class="text-xs text-slate-500">Todos os serviços registrados, valores cobrados e datas de retorno.</p>
+                    </div>
+
+                    <!-- Filtros -->
+                    <div class="flex flex-col sm:flex-row gap-2.5">
+                        <div class="relative">
+                            <i class="fa-solid fa-magnifying-glass text-slate-400 absolute left-3.5 top-3 text-xs"></i>
+                            <input type="text" id="filter-search" oninput="renderAdminDashboard()" placeholder="Buscar cliente ou serviço..." class="pl-9 pr-3 py-2 rounded-xl border border-slate-300 text-xs w-full sm:w-48 focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                        <select id="filter-type" onchange="renderAdminDashboard()" class="px-3 py-2 rounded-xl border border-slate-300 text-xs bg-white focus:ring-2 focus:ring-blue-500 outline-none">
+                            <option value="ALL">Todos os Serviços</option>
+                            <option value="Pequenos Reparos">Pequenos Reparos</option>
+                            <option value="Limpeza de Painéis Solares">Limpeza Solar</option>
+                        </select>
+                        <input type="month" id="filter-month" onchange="renderAdminDashboard()" class="px-3 py-2 rounded-xl border border-slate-300 text-xs bg-white focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                </div>
+
+                <!-- Lista de Serviços -->
+                <div id="services-history-list" class="space-y-3">
+                    <!-- Renderizado via JS -->
+                </div>
+            </div>
+
+        </section>
+    </main>
+
+    <!-- Rodapé -->
+    <footer class="bg-white border-t border-slate-200 py-4 mt-8">
+        <div class="max-w-5xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-2">
+            <span><strong>Soluções & Reparos</strong> • Pequenos Reparos & Limpeza de Painéis Solares</span>
+            <span>Atendimento: Seg a Sáb, 08h às 18h (Exclusivo via WhatsApp)</span>
+        </div>
+    </footer>
+
+    <!-- Lógica Completa da Aplicação -->
+    <script>
+        // ==========================================
+        // CONFIGURAÇÃO DO FIREBASE (PROJETO solucoes-reparos)
+        // ==========================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyDpSuU7gInvFUuTPAaRJwRLmi31t2SSf7Q",
+            authDomain: "solucoes-reparos.firebaseapp.com",
+            projectId: "solucoes-reparos",
+            storageBucket: "solucoes-reparos.firebasestorage.app",
+            messagingSenderId: "302397450006",
+            appId: "1:302397450006:web:01a8ac69568238cd311237"
+        };
+
+        const COLLECTION_SERVICES = 'solucoes_reparos_services';
+        const COLLECTION_CONFIG = 'solucoes_reparos_config';
+        const STORAGE_KEY_SERVICES = 'solucoes_reparos_services_v1';
+        const STORAGE_KEY_SETTINGS = 'solucoes_reparos_settings_v1';
+
+        let db = null;
+        let isCloudConnected = false;
+        let servicesCache = [];
+        let settingsCache = { companyWhatsApp: '5544999999999' };
+
+        let currentClientServiceType = 'repair';
+        let selectedRepairCategory = '';
+
+        function updateCloudBadge(connected) {
+            isCloudConnected = connected;
+            const badge = document.getElementById('cloud-status-badge');
+            if (!badge) return;
+            if (connected) {
+                badge.className = 'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-950 text-emerald-300 border border-emerald-700/70';
+                badge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Nuvem Ativa';
+            } else {
+                badge.className = 'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-800 text-slate-300 border border-slate-700';
+                badge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span> Modo Local';
+            }
+        }
+
+        try {
+            if (firebaseConfig.apiKey && !firebaseConfig.apiKey.startsWith('COLE_')) {
+                if (!firebase.apps.length) {
+                    firebase.initializeApp(firebaseConfig);
+                }
+                db = firebase.firestore();
+                updateCloudBadge(true);
+            }
+        } catch (err) {
+            console.warn('Firebase em fallback local:', err);
+            updateCloudBadge(false);
+        }
+
+        function getInitialDemoServices() {
+            const today = new Date();
+            
+            const sixMonthsAgo = new Date(today);
+            sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+            sixMonthsAgo.setDate(sixMonthsAgo.getDate() - 5);
+
+            const almostSixMonths = new Date(today);
+            almostSixMonths.setMonth(almostSixMonths.getMonth() - 5);
+            almostSixMonths.setDate(almostSixMonths.getDate() - 20);
+
+            const recentDate = new Date(today);
+            recentDate.setDate(recentDate.getDate() - 2);
+
+            return [
+                {
+                    id: 'demo-1',
+                    date: formatDateISO(sixMonthsAgo),
+                    clientName: 'Roberto Almeida (Exemplo)',
+                    clientPhone: '(44) 99812-3456',
+                    serviceType: 'Limpeza de Painéis Solares',
+                    description: 'Limpeza de 16 placas solares - Casa térrea telha de barro',
+                    value: 280.00,
+                    isDemo: true
+                },
+                {
+                    id: 'demo-2',
+                    date: formatDateISO(almostSixMonths),
+                    clientName: 'Mariana Costa (Exemplo)',
+                    clientPhone: '(44) 99945-7890',
+                    serviceType: 'Limpeza de Painéis Solares',
+                    description: 'Higienização de 22 placas solares - Sobrado',
+                    value: 350.00,
+                    isDemo: true
+                },
+                {
+                    id: 'demo-3',
+                    date: formatDateISO(recentDate),
+                    clientName: 'Fernanda Souza (Exemplo)',
+                    clientPhone: '(44) 99711-2233',
+                    serviceType: 'Pequenos Reparos',
+                    description: 'Troca de chuveiro elétrico + reparo em vazamento da torneira da cozinha',
+                    value: 140.00,
+                    isDemo: true
+                }
+            ];
+        }
+
+        function getSettings() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY_SETTINGS);
+                if (raw) settingsCache = JSON.parse(raw);
+            } catch (e) {}
+            return settingsCache;
+        }
+
+        async function saveSettings(settings) {
+            settingsCache = settings;
+            localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(settings));
+            if (db) {
+                try {
+                    await db.collection(COLLECTION_CONFIG).doc('main').set(settings, { merge: true });
+                } catch (e) {
+                    console.error('Erro ao salvar config no Firestore:', e);
+                }
+            }
+        }
+
+        function getServices() {
+            if (servicesCache.length > 0) return servicesCache;
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY_SERVICES);
+                if (raw === null) {
+                    const demo = getInitialDemoServices();
+                    servicesCache = demo;
+                    localStorage.setItem(STORAGE_KEY_SERVICES, JSON.stringify(demo));
+                    return demo;
+                }
+                servicesCache = JSON.parse(raw);
+                return servicesCache;
+            } catch (e) {
+                console.error('Erro ao ler dados:', e);
+                return [];
+            }
+        }
+
+        function persistLocalServices(list) {
+            servicesCache = list;
+            localStorage.setItem(STORAGE_KEY_SERVICES, JSON.stringify(list));
+            updateNavAlertBadge();
+        }
+
+        async function upsertServiceCloud(serviceObj) {
+            if (!db) return;
+            try {
+                await db.collection(COLLECTION_SERVICES).doc(serviceObj.id).set(serviceObj, { merge: true });
+            } catch (e) {
+                console.error('Erro ao salvar serviço no Firestore:', e);
+                showToast('Salvo localmente (verifique conexão com Firestore).', 'info');
+            }
+        }
+
+        async function deleteServiceCloud(serviceId) {
+            if (!db) return;
+            try {
+                await db.collection(COLLECTION_SERVICES).doc(serviceId).delete();
+            } catch (e) {
+                console.error('Erro ao excluir serviço no Firestore:', e);
+            }
+        }
+
+        function initCloudListeners() {
+            if (!db) return;
+
+            db.collection(COLLECTION_CONFIG).doc('main').onSnapshot((doc) => {
+                if (doc.exists && doc.data()) {
+                    settingsCache = { ...settingsCache, ...doc.data() };
+                    localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(settingsCache));
+                    const input = document.getElementById('company-whatsapp-input');
+                    if (input && settingsCache.companyWhatsApp) {
+                        input.value = settingsCache.companyWhatsApp;
+                    }
+                }
+            }, (err) => {
+                console.warn('Erro no listener de config:', err);
+            });
+
+            db.collection(COLLECTION_SERVICES).onSnapshot((snapshot) => {
+                updateCloudBadge(true);
+                const cloudList = [];
+                snapshot.forEach((doc) => {
+                    cloudList.push({ id: doc.id, ...doc.data() });
+                });
+
+                if (cloudList.length > 0 || !snapshot.metadata.fromCache) {
+                    persistLocalServices(cloudList);
+                    if (!document.getElementById('view-admin').classList.contains('hidden')) {
+                        renderAdminDashboard();
+                    }
+                }
+            }, (err) => {
+                console.warn('Erro no listener de serviços:', err);
+                updateCloudBadge(false);
+            });
+        }
+
+        function formatDateISO(dateObj) {
+            const y = dateObj.getFullYear();
+            const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const d = String(dateObj.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
+        function formatDateBR(isoStr) {
+            if (!isoStr) return '-';
+            const [y, m, d] = isoStr.split('-');
+            return `${d}/${m}/${y}`;
+        }
+
+        function addSixMonths(isoStr) {
+            const [y, m, d] = isoStr.split('-').map(Number);
+            const date = new Date(y, m - 1, d);
+            date.setMonth(date.getMonth() + 6);
+            return formatDateISO(date);
+        }
+
+        function getDaysDifferenceFromToday(targetIsoStr) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const [y, m, d] = targetIsoStr.split('-').map(Number);
+            const target = new Date(y, m - 1, d);
+            target.setHours(0, 0, 0, 0);
+            const diffTime = target - today;
+            return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        }
+
+        function formatCurrency(val) {
+            return Number(val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        }
+
+        function maskPhone(input) {
+            let v = input.value.replace(/\D/g, '');
+            if (v.length > 11) v = v.slice(0, 11);
+            if (v.length > 6) {
+                input.value = `(${v.slice(0, 2)}) ${v.slice(2, 7)}-${v.slice(7)}`;
+            } else if (v.length > 2) {
+                input.value = `(${v.slice(0, 2)}) ${v.slice(2)}`;
+            } else if (v.length > 0) {
+                input.value = `(${v}`;
+            }
+        }
+
+        function sanitizeWhatsAppNumber(phoneStr) {
+            let digits = String(phoneStr || '').replace(/\D/g, '');
+            if (!digits) return '';
+            if (digits.length === 10 || digits.length === 11) {
+                digits = '55' + digits;
+            }
+            return digits;
+        }
+
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const colors = {
+                success: 'bg-slate-900 text-white border-l-4 border-green-500',
+                error: 'bg-slate-900 text-white border-l-4 border-red-500',
+                info: 'bg-slate-900 text-white border-l-4 border-blue-500'
+            };
+            const icons = {
+                success: 'fa-circle-check text-green-400',
+                error: 'fa-circle-exclamation text-red-400',
+                info: 'fa-circle-info text-blue-400'
+            };
+            toast.className = `${colors[type]} px-4 py-3 rounded-xl shadow-lg flex items-center gap-3 text-xs sm:text-sm font-medium pointer-events-auto transition-all duration-300 transform translate-y-0 opacity-100`;
+            toast.innerHTML = `<i class="fa-solid ${icons[type]} text-base"></i><span>${message}</span>`;
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', '-translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 3500);
+        }
+
+        let confirmCallback = null;
+        function openConfirmModal(title, message, onConfirm) {
+            document.getElementById('confirm-title').textContent = title;
+            document.getElementById('confirm-message').textContent = message;
+            confirmCallback = onConfirm;
+            const modal = document.getElementById('confirm-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeConfirmModal() {
+            const modal = document.getElementById('confirm-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            confirmCallback = null;
+        }
+
+        document.getElementById('confirm-cancel-btn').addEventListener('click', closeConfirmModal);
+        document.getElementById('confirm-ok-btn').addEventListener('click', () => {
+            if (confirmCallback) confirmCallback();
+            closeConfirmModal();
+        });
+
+        function switchTab(tab) {
+            const clientView = document.getElementById('view-client');
+            const adminView = document.getElementById('view-admin');
+            const clientBtn = document.getElementById('tab-client-btn');
+            const adminBtn = document.getElementById('tab-admin-btn');
+
+            if (tab === 'client') {
+                clientView.classList.remove('hidden');
+                adminView.classList.add('hidden');
+                clientBtn.className = 'flex-1 sm:flex-initial px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2 bg-blue-600 text-white shadow';
+                adminBtn.className = 'flex-1 sm:flex-initial px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2 text-slate-300 hover:text-white';
+            } else {
+                clientView.classList.add('hidden');
+                adminView.classList.remove('hidden');
+                adminBtn.className = 'flex-1 sm:flex-initial px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2 bg-blue-600 text-white shadow';
+                clientBtn.className = 'flex-1 sm:flex-initial px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2 text-slate-300 hover:text-white';
+                renderAdminDashboard();
+            }
+        }
+
+        function selectClientServiceType(type) {
+            currentClientServiceType = type;
+            const btnRepair = document.getElementById('btn-select-repair');
+            const btnSolar = document.getElementById('btn-select-solar');
+            const fieldsRepair = document.getElementById('client-fields-repair');
+            const fieldsSolar = document.getElementById('client-fields-solar');
+            const repairDescInput = document.getElementById('repair-description');
+            const solarCountInput = document.getElementById('solar-panels-count');
+
+            if (type === 'repair') {
+                btnRepair.className = 'p-4 rounded-2xl border-2 border-blue-600 bg-blue-50/70 text-left transition flex items-start gap-3.5 shadow-sm';
+                btnSolar.className = 'p-4 rounded-2xl border-2 border-slate-200 bg-white hover:border-amber-400 text-left transition flex items-start gap-3.5';
+                fieldsRepair.classList.remove('hidden');
+                fieldsSolar.classList.add('hidden');
+                repairDescInput.required = true;
+                solarCountInput.required = false;
+            } else {
+                btnSolar.className = 'p-4 rounded-2xl border-2 border-amber-500 bg-amber-50/70 text-left transition flex items-start gap-3.5 shadow-sm';
+                btnRepair.className = 'p-4 rounded-2xl border-2 border-slate-200 bg-white hover:border-blue-400 text-left transition flex items-start gap-3.5';
+                fieldsSolar.classList.remove('hidden');
+                fieldsRepair.classList.add('hidden');
+                repairDescInput.required = false;
+                solarCountInput.required = true;
+            }
+        }
+
+        function toggleCategory(btn, categoryName) {
+            const allChips = document.querySelectorAll('.cat-chip');
+            if (selectedRepairCategory === categoryName) {
+                selectedRepairCategory = '';
+                btn.className = 'cat-chip px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-300 bg-white text-slate-700 hover:border-blue-500 transition';
+            } else {
+                allChips.forEach(c => {
+                    c.className = 'cat-chip px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-300 bg-white text-slate-700 hover:border-blue-500 transition';
+                });
+                selectedRepairCategory = categoryName;
+                btn.className = 'cat-chip px-3.5 py-2 rounded-xl text-xs font-semibold border-2 border-blue-600 bg-blue-600 text-white shadow-sm transition';
+            }
+        }
+
+        function buildClientWhatsAppMessage() {
+            const name = document.getElementById('client-name').value.trim();
+            const location = document.getElementById('client-location').value.trim();
+
+            if (!name || !location) {
+                showToast('Por favor, preencha seu nome e bairro/cidade.', 'error');
+                return null;
+            }
+
+            let message = `Olá, *Soluções & Reparos*! Gostaria de solicitar um orçamento.\n\n`;
+            message += `👤 *Cliente:* ${name}\n`;
+            message += `📍 *Local:* ${location}\n`;
+
+            if (currentClientServiceType === 'repair') {
+                const desc = document.getElementById('repair-description').value.trim();
+                if (!desc) {
+                    showToast('Por favor, descreva o serviço ou problema.', 'error');
+                    return null;
+                }
+                message += `🛠️ *Serviço:* Pequenos Reparos\n`;
+                if (selectedRepairCategory) {
+                    message += `📂 *Categoria:* ${selectedRepairCategory}\n`;
+                }
+                message += `📝 *Descrição detalhada:*\n${desc}\n\n`;
+                message += `📸 _Vou enviar uma foto/vídeo do local agora para ajudar na avaliação!_`;
+            } else {
+                const count = document.getElementById('solar-panels-count').value.trim();
+                const roof = document.getElementById('solar-roof-type').value;
+                const obs = document.getElementById('solar-description').value.trim();
+
+                if (!count) {
+                    showToast('Informe a quantidade aproximada de placas solares.', 'error');
+                    return null;
+                }
+                message += `☀️ *Serviço:* Limpeza de Painéis Solares\n`;
+                message += `🔢 *Qtd. de Placas:* Aprox. ${count} placas\n`;
+                message += `🏠 *Telhado / Altura:* ${roof}\n`;
+                if (obs) {
+                    message += `📝 *Observações:* ${obs}\n`;
+                }
+                message += `\n📸 _Aguardo análise dentro do horário comercial (Seg a Sáb, 8h às 18h)._`;
+            }
+
+            return message;
+        }
+
+        document.getElementById('client-quote-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const msg = buildClientWhatsAppMessage();
+            if (!msg) return;
+
+            const settings = getSettings();
+            const targetPhone = sanitizeWhatsAppNumber(settings.companyWhatsApp);
+            if (!targetPhone) {
+                showToast('Configure o WhatsApp da empresa em "Meu Painel" primeiro.', 'error');
+                return;
+            }
+
+            const url = `https://wa.me/${targetPhone}?text=${encodeURIComponent(msg)}`;
+            window.open(url, '_blank');
+            showToast('Abrindo WhatsApp com sua solicitação!', 'success');
+        });
+
+        function copyClientQuoteText() {
+            const msg = buildClientWhatsAppMessage();
+            if (!msg) return;
+
+            const tempTextarea = document.createElement('textarea');
+            tempTextarea.value = msg;
+            document.body.appendChild(tempTextarea);
+            tempTextarea.select();
+            try {
+                document.execCommand('copy');
+                showToast('Texto do orçamento copiado!', 'success');
+            } catch (err) {
+                showToast('Não foi possível copiar o texto.', 'error');
+            }
+            document.body.removeChild(tempTextarea);
+        }
+
+        async function saveCompanyWhatsApp() {
+            const input = document.getElementById('company-whatsapp-input');
+            const clean = sanitizeWhatsAppNumber(input.value);
+            if (clean.length < 12) {
+                showToast('Digite o número com código do país e DDD (Ex: 5544999999999)', 'error');
+                return;
+            }
+            const settings = getSettings();
+            settings.companyWhatsApp = clean;
+            await saveSettings(settings);
+            input.value = clean;
+            showToast('WhatsApp da empresa atualizado!', 'success');
+        }
+
+        document.getElementById('admin-add-service-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const date = document.getElementById('srv-date').value;
+            const clientName = document.getElementById('srv-client').value.trim();
+            const clientPhone = document.getElementById('srv-phone').value.trim();
+            const value = parseFloat(document.getElementById('srv-value').value);
+            const serviceType = document.getElementById('srv-type').value;
+            const description = document.getElementById('srv-desc').value.trim();
+
+            if (!date || !clientName || !clientPhone || isNaN(value) || !description) {
+                showToast('Preencha todos os campos obrigatórios.', 'error');
+                return;
+            }
+
+            const services = [...getServices()];
+            const newService = {
+                id: 'srv-' + Date.now(),
+                date,
+                clientName,
+                clientPhone,
+                serviceType,
+                description,
+                value,
+                isDemo: false
+            };
+
+            services.unshift(newService);
+            persistLocalServices(services);
+            await upsertServiceCloud(newService);
+
+            document.getElementById('srv-client').value = '';
+            document.getElementById('srv-phone').value = '';
+            document.getElementById('srv-value').value = '';
+            document.getElementById('srv-desc').value = '';
+
+            renderAdminDashboard();
+            showToast(
+                serviceType === 'Limpeza de Painéis Solares' 
+                    ? 'Limpeza Solar salva! Lembrete de 6 meses agendado.' 
+                    : 'Serviço salvo na agenda com sucesso!', 
+                'success'
+            );
+        });
+
+        function renewSolarService(serviceId) {
+            const services = [...getServices()];
+            const original = services.find(s => s.id === serviceId);
+            if (!original) return;
+
+            openConfirmModal(
+                'Renovar Limpeza Solar',
+                `Deseja registrar uma nova limpeza hoje para "${original.clientName}" no valor de ${formatCurrency(original.value)}? Isso reiniciará o ciclo de 6 meses.`,
+                async () => {
+                    const todayISO = formatDateISO(new Date());
+                    const renewed = {
+                        id: 'srv-' + Date.now(),
+                        date: todayISO,
+                        clientName: original.clientName,
+                        clientPhone: original.clientPhone,
+                        serviceType: 'Limpeza de Painéis Solares',
+                        description: original.description,
+                        value: original.value,
+                        isDemo: false
+                    };
+                    services.unshift(renewed);
+                    persistLocalServices(services);
+                    await upsertServiceCloud(renewed);
+                    renderAdminDashboard();
+                    showToast('Nova limpeza registrada hoje! Próximo lembrete em 6 meses.', 'success');
+                }
+            );
+        }
+
+        function remindSolarClientWhatsApp(serviceId) {
+            const services = getServices();
+            const srv = services.find(s => s.id === serviceId);
+            if (!srv) return;
+
+            const targetPhone = sanitizeWhatsAppNumber(srv.clientPhone);
+            if (!targetPhone) {
+                showToast('Telefone do cliente inválido.', 'error');
+                return;
+            }
+
+            const msg = `Olá *${srv.clientName}*! Tudo bem? Aqui é da *Soluções & Reparos*.\n\nJá completou 6 meses desde a última limpeza dos seus painéis solares (*${srv.description}*) realizada no dia *${formatDateBR(srv.date)}*.\n\nVamos agendar uma nova higienização para manter a eficiência máxima da sua geração de energia? ☀️`;
+
+            const url = `https://wa.me/${targetPhone}?text=${encodeURIComponent(msg)}`;
+            window.open(url, '_blank');
+        }
+
+        function deleteService(serviceId) {
+            const srv = getServices().find(s => s.id === serviceId);
+            const nomeCliente = srv ? srv.clientName : 'este registro';
+
+            openConfirmModal(
+                'Excluir Cliente / Serviço',
+                `Tem certeza que deseja excluir "${nomeCliente}" da agenda e do faturamento?`,
+                async () => {
+                    const updated = getServices().filter(s => s.id !== serviceId);
+                    persistLocalServices(updated);
+                    await deleteServiceCloud(serviceId);
+                    renderAdminDashboard();
+                    showToast('Cliente / serviço excluído.', 'info');
+                }
+            );
+        }
+
+        function openEditModal(serviceId) {
+            const srv = getServices().find(s => s.id === serviceId);
+            if (!srv) return;
+
+            document.getElementById('edit-id').value = srv.id;
+            document.getElementById('edit-date').value = srv.date;
+            document.getElementById('edit-value').value = srv.value;
+            document.getElementById('edit-client').value = srv.clientName;
+            document.getElementById('edit-phone').value = srv.clientPhone;
+            document.getElementById('edit-type').value = srv.serviceType;
+            document.getElementById('edit-desc').value = srv.description;
+
+            const modal = document.getElementById('edit-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeEditModal() {
+            const modal = document.getElementById('edit-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        document.getElementById('edit-service-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const id = document.getElementById('edit-id').value;
+            const services = [...getServices()];
+            const idx = services.findIndex(s => s.id === id);
+            if (idx === -1) return;
+
+            const updatedItem = {
+                ...services[idx],
+                date: document.getElementById('edit-date').value,
+                value: parseFloat(document.getElementById('edit-value').value),
+                clientName: document.getElementById('edit-client').value.trim(),
+                clientPhone: document.getElementById('edit-phone').value.trim(),
+                serviceType: document.getElementById('edit-type').value,
+                description: document.getElementById('edit-desc').value.trim(),
+                isDemo: false
+            };
+
+            services[idx] = updatedItem;
+            persistLocalServices(services);
+            await upsertServiceCloud(updatedItem);
+            closeEditModal();
+            renderAdminDashboard();
+            showToast('Serviço atualizado com sucesso!', 'success');
+        });
+
+        function confirmClearDemoData() {
+            openConfirmModal(
+                'Limpar Exemplos',
+                'Deseja remover os registros de exemplo fictícios e manter apenas os seus serviços reais?',
+                async () => {
+                    const current = getServices();
+                    const demoIds = current.filter(s => s.isDemo).map(s => s.id);
+                    const remaining = current.filter(s => !s.isDemo);
+
+                    persistLocalServices(remaining);
+                    for (const demoId of demoIds) {
+                        await deleteServiceCloud(demoId);
+                    }
+
+                    renderAdminDashboard();
+                    showToast('Dados de exemplo removidos!', 'success');
+                }
+            );
+        }
+
+        function exportBackupJSON() {
+            const data = {
+                settings: getSettings(),
+                services: getServices(),
+                exportedAt: new Date().toISOString()
+            };
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `backup_solucoes_reparos_${formatDateISO(new Date())}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('Backup baixado com sucesso!', 'success');
+        }
+
+        function importBackupJSON(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                try {
+                    const parsed = JSON.parse(e.target.result);
+                    if (Array.isArray(parsed.services)) {
+                        persistLocalServices(parsed.services);
+                        for (const item of parsed.services) {
+                            await upsertServiceCloud(item);
+                        }
+                        if (parsed.settings) await saveSettings(parsed.settings);
+                        document.getElementById('company-whatsapp-input').value = getSettings().companyWhatsApp;
+                        renderAdminDashboard();
+                        showToast('Backup restaurado com sucesso!', 'success');
+                    } else {
+                        showToast('Arquivo de backup inválido.', 'error');
+                    }
+                } catch (err) {
+                    showToast('Erro ao ler o arquivo JSON.', 'error');
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+
+        function updateNavAlertBadge() {
+            const services = getServices();
+            const solarServices = services.filter(s => s.serviceType === 'Limpeza de Painéis Solares');
+            let alertCount = 0;
+
+            solarServices.forEach(s => {
+                const nextDate = addSixMonths(s.date);
+                const daysLeft = getDaysDifferenceFromToday(nextDate);
+                if (daysLeft <= 15) alertCount++;
+            });
+
+            const badge = document.getElementById('nav-alert-badge');
+            if (alertCount > 0) {
+                badge.textContent = alertCount;
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+            return alertCount;
+        }
+
+        function renderAdminDashboard() {
+            const services = getServices();
+            const now = new Date();
+            const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+            const hasDemo = services.some(s => s.isDemo);
+            const clearDemoBtn = document.getElementById('btn-clear-demo');
+            if (hasDemo) clearDemoBtn.classList.remove('hidden');
+            else clearDemoBtn.classList.add('hidden');
+
+            let monthRevenue = 0;
+            let totalRevenue = 0;
+
+            services.forEach(s => {
+                const val = Number(s.value || 0);
+                totalRevenue += val;
+                if (s.date && s.date.startsWith(currentYearMonth)) {
+                    monthRevenue += val;
+                }
+            });
+
+            const alertCount = updateNavAlertBadge();
+
+            document.getElementById('stat-month-revenue').textContent = formatCurrency(monthRevenue);
+            document.getElementById('stat-total-revenue').textContent = formatCurrency(totalRevenue);
+            document.getElementById('stat-total-count').textContent = services.length;
+            document.getElementById('stat-solar-alerts').textContent = alertCount;
+
+            const solarRadarContainer = document.getElementById('solar-radar-list');
+            const solarServices = services
+                .filter(s => s.serviceType === 'Limpeza de Painéis Solares')
+                .map(s => {
+                    const nextDate = addSixMonths(s.date);
+                    const daysLeft = getDaysDifferenceFromToday(nextDate);
+                    return { ...s, nextDate, daysLeft };
+                })
+                .sort((a, b) => a.daysLeft - b.daysLeft);
+
+            if (solarServices.length === 0) {
+                solarRadarContainer.innerHTML = `
+                    <div class="text-center py-6 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-xs sm:text-sm text-slate-500">
+                        Nenhuma limpeza de painéis solares registrada ainda. Quando você cadastrar uma, o lembrete automático de 6 meses aparecerá aqui.
+                    </div>
+                `;
+            } else {
+                solarRadarContainer.innerHTML = solarServices.map(s => {
+                    let badgeHtml = '';
+                    let cardBorder = 'border-slate-200 bg-slate-50/50';
+
+                    if (s.daysLeft <= 0) {
+                        const overdueDays = Math.abs(s.daysLeft);
+                        const label = overdueDays === 0 ? 'VENCE HOJE!' : `VENCIDO HÁ ${overdueDays} DIA(S)`;
+                        badgeHtml = `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-100 text-red-700"><i class="fa-solid fa-fire"></i> ${label}</span>`;
+                        cardBorder = 'border-red-300 bg-red-50/40';
+                    } else if (s.daysLeft <= 15) {
+                        badgeHtml = `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800"><i class="fa-solid fa-clock"></i> VENCE EM ${s.daysLeft} DIA(S)</span>`;
+                        cardBorder = 'border-amber-300 bg-amber-50/40';
+                    } else {
+                        badgeHtml = `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-green-100 text-green-700"><i class="fa-solid fa-check"></i> EM DIA (Faltam ${s.daysLeft} dias)</span>`;
+                    }
+
+                    return `
+                        <div class="p-4 rounded-xl border ${cardBorder} flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                            <div class="space-y-1">
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <span class="font-bold text-slate-900 text-sm sm:text-base">${s.clientName}</span>
+                                    ${badgeHtml}
+                                </div>
+                                <p class="text-xs text-slate-600 font-medium">${s.description}</p>
+                                <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 pt-0.5">
+                                    <span><i class="fa-regular fa-calendar mr-1"></i> Última lavagem: <strong>${formatDateBR(s.date)}</strong></span>
+                                    <span><i class="fa-solid fa-rotate mr-1 text-amber-600"></i> Próxima (6 meses): <strong class="text-slate-800">${formatDateBR(s.nextDate)}</strong></span>
+                                    <span><i class="fa-solid fa-tag mr-1"></i> Último valor: <strong>${formatCurrency(s.value)}</strong></span>
+                                </div>
+                            </div>
+
+                            <div class="flex flex-wrap items-center gap-2 shrink-0">
+                                <button onclick="remindSolarClientWhatsApp('${s.id}')" class="flex-1 sm:flex-initial px-4 py-2.5 rounded-xl bg-green-600 hover:bg-green-700 text-white text-xs font-bold shadow-sm transition flex items-center justify-center gap-1.5">
+                                    <i class="fa-brands fa-whatsapp text-sm"></i>
+                                    <span>Lembrar no WhatsApp</span>
+                                </button>
+                                <button onclick="renewSolarService('${s.id}')" title="Registrar nova limpeza hoje" class="px-3.5 py-2.5 rounded-xl bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-semibold transition flex items-center gap-1.5">
+                                    <i class="fa-solid fa-arrows-rotate text-blue-600"></i>
+                                    <span>Renovar Hoje</span>
+                                </button>
+                                <button onclick="deleteService('${s.id}')" title="Excluir cliente / serviço" class="px-3 py-2.5 rounded-xl bg-white border border-red-200 hover:bg-red-50 text-red-600 text-xs font-semibold transition flex items-center gap-1.5">
+                                    <i class="fa-solid fa-trash"></i>
+                                    <span>Excluir</span>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            const searchFilter = document.getElementById('filter-search').value.toLowerCase().trim();
+            const typeFilter = document.getElementById('filter-type').value;
+            const monthFilter = document.getElementById('filter-month').value;
+
+            const filteredServices = services
+                .filter(s => {
+                    if (typeFilter !== 'ALL' && s.serviceType !== typeFilter) return false;
+                    if (monthFilter && !s.date.startsWith(monthFilter)) return false;
+                    if (searchFilter) {
+                        const matchName = s.clientName.toLowerCase().includes(searchFilter);
+                        const matchDesc = s.description.toLowerCase().includes(searchFilter);
+                        const matchPhone = s.clientPhone.includes(searchFilter);
+                        if (!matchName && !matchDesc && !matchPhone) return false;
+                    }
+                    return true;
+                })
+                .sort((a, b) => b.date.localeCompare(a.date));
+
+            const historyContainer = document.getElementById('services-history-list');
+
+            if (filteredServices.length === 0) {
+                historyContainer.innerHTML = `
+                    <div class="text-center py-8 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-sm text-slate-500">
+                        Nenhum serviço encontrado para os filtros selecionados.
+                    </div>
+                `;
+            } else {
+                historyContainer.innerHTML = filteredServices.map(s => {
+                    const isSolar = s.serviceType === 'Limpeza de Painéis Solares';
+                    const typeBadge = isSolar
+                        ? `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-semibold bg-amber-100 text-amber-800"><i class="fa-solid fa-sun"></i> Limpeza Solar</span>`
+                        : `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-semibold bg-blue-100 text-blue-800"><i class="fa-solid fa-screwdriver-wrench"></i> Pequenos Reparos</span>`;
+
+                    const solarReturnNote = isSolar
+                        ? `<span class="text-xs text-amber-700 font-medium"><i class="fa-solid fa-bell mr-1"></i>Retorno 6 meses: ${formatDateBR(addSixMonths(s.date))}</span>`
+                        : '';
+
+                    return `
+                        <div class="p-4 rounded-xl border border-slate-200 hover:border-slate-300 bg-white transition flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div class="space-y-1.5">
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <span class="text-xs font-bold px-2.5 py-0.5 rounded-md bg-slate-100 text-slate-700">${formatDateBR(s.date)}</span>
+                                    <span class="font-bold text-slate-900 text-sm sm:text-base">${s.clientName}</span>
+                                    ${typeBadge}
+                                </div>
+                                <p class="text-xs sm:text-sm text-slate-700 bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                                    ${s.description}
+                                </p>
+                                <div class="flex flex-wrap items-center gap-4 text-xs text-slate-500">
+                                    <span><i class="fa-brands fa-whatsapp text-green-600 mr-1"></i>${s.clientPhone}</span>
+                                    ${solarReturnNote}
+                                </div>
+                            </div>
+
+                            <div class="flex sm:flex-col items-center sm:items-end justify-between gap-2 border-t sm:border-t-0 pt-3 sm:pt-0 border-slate-100 shrink-0">
+                                <div class="text-lg font-extrabold text-green-700">${formatCurrency(s.value)}</div>
+                                <div class="flex items-center gap-1.5">
+                                    <button onclick="openEditModal('${s.id}')" title="Editar" class="p-2 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition">
+                                        <i class="fa-solid fa-pen-to-square"></i>
+                                    </button>
+                                    <button onclick="deleteService('${s.id}')" title="Excluir" class="p-2 rounded-lg text-slate-500 hover:text-red-600 hover:bg-red-50 transition">
+                                        <i class="fa-solid fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('srv-date').value = formatDateISO(new Date());
+
+            const settings = getSettings();
+            document.getElementById('company-whatsapp-input').value = settings.companyWhatsApp || '5544999999999';
+
+            updateNavAlertBadge();
+            initCloudListeners();
+        });
+    </script>
+</body>
+</html>
